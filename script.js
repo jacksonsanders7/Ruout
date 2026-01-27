@@ -71,19 +71,20 @@ map.on("click", e => {
       .addTo(map)
       .bindPopup("Destination")
       .openPopup();
-    buildRoute();
+    buildRoute(startPoint, endPoint);
     clickStage = 0;
   }
 });
 
 // ===================== ROUTING =====================
-function buildRoute() {
-  if (!startPoint || !endPoint) return;
+function buildRoute(start, end) {
+  if (!start || !end) return;
 
+  // Remove previous route
   if (routingControl) map.removeControl(routingControl);
 
   routingControl = L.Routing.control({
-    waypoints: [startPoint, endPoint].map(p => L.latLng(p.lat, p.lng)),
+    waypoints: [start, end],
     router: L.Routing.osrmv1({
       serviceUrl: "https://router.project-osrm.org/route/v1/driving"
     }),
@@ -96,21 +97,19 @@ function buildRoute() {
     showAlternatives: false
   }).addTo(map);
 
-  routingControl.on("routesfound", e => handleRoute(e.routes[0]));
-  routingControl.on("routeselected", e => handleRoute(e.route));
-}
-
-// ===================== ROUTE PROCESSING =====================
-function handleRoute(route) {
-  updateETA(route);
+  routingControl.on("routesfound", e => updateETA(e.routes[0]));
+  routingControl.on("routeselected", e => updateETA(e.route));
 }
 
 // ===================== ETA =====================
 function updateETA(route) {
+  if (!route) return;
+
   let eta = route.summary.totalTime;
 
+  // Approximate delay for red lights
   allTrafficLights.forEach(light => {
-    if (light.state === "red") eta += 30; // approximate 30s delay
+    if (light.state === "red") eta += 30; // 30 seconds per red light
   });
 
   document.getElementById("etaValue").innerText =
