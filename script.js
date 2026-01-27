@@ -8,8 +8,10 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 
 // ===================== STATE =====================
 let clickStage = 0;
-let startPoint, endPoint;
-let startMarker, endMarker;
+let startPoint = null;
+let endPoint = null;
+let startMarker = null;
+let endMarker = null;
 let routingControl = null;
 
 const allTrafficLights = [];
@@ -59,14 +61,14 @@ setInterval(() => {
 map.on("click", e => {
   if (clickStage === 0) {
     resetAll();
-    startPoint = e.latlng;
+    startPoint = L.latLng(e.latlng.lat, e.latlng.lng);
     startMarker = L.marker(startPoint)
       .addTo(map)
       .bindPopup("Start")
       .openPopup();
     clickStage = 1;
   } else {
-    endPoint = e.latlng;
+    endPoint = L.latLng(e.latlng.lat, e.latlng.lng);
     endMarker = L.marker(endPoint)
       .addTo(map)
       .bindPopup("Destination")
@@ -80,7 +82,6 @@ map.on("click", e => {
 function buildRoute(start, end) {
   if (!start || !end) return;
 
-  // Remove previous route if it exists
   if (routingControl) map.removeControl(routingControl);
 
   routingControl = L.Routing.control({
@@ -93,7 +94,7 @@ function buildRoute(start, end) {
     },
     addWaypoints: false,
     draggableWaypoints: false,
-    fitSelectedRoutes: true, // automatically fit map bounds
+    fitSelectedRoutes: true, // auto zoom to route
     showAlternatives: false
   }).addTo(map);
 
@@ -107,9 +108,9 @@ function updateETA(route) {
 
   let eta = route.summary.totalTime;
 
-  // Approximate delay for red lights
+  // Approximate delay for red lights along map
   allTrafficLights.forEach(light => {
-    if (light.state === "red") eta += 30; // 30 seconds per red light
+    if (light.state === "red") eta += 30; // add 30s per red light
   });
 
   document.getElementById("etaValue").innerText =
@@ -119,7 +120,11 @@ function updateETA(route) {
 // ===================== RESET =====================
 function resetAll() {
   if (routingControl) map.removeControl(routingControl);
-  if (startMarker) map.removeLayer(startMarker);
-  if (endMarker) map.removeLayer(endMarker);
-}
+  routingControl = null;
 
+  if (startMarker) map.removeLayer(startMarker);
+  startMarker = null;
+
+  if (endMarker) map.removeLayer(endMarker);
+  endMarker = null;
+}
