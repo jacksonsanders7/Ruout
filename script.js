@@ -5,6 +5,19 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   maxZoom: 19,
   attribution: "© OpenStreetMap contributors"
 }).addTo(map);
+L.Routing.control({
+  waypoints: [
+    L.latLng(35.7796, -78.6382),
+    L.latLng(35.7896, -78.6482)
+  ],
+  lineOptions: {
+    styles: [{ color: "blue", weight: 8, opacity: 0.9 }]
+  },
+  addWaypoints: false,
+  draggableWaypoints: false,
+  fitSelectedRoutes: true,
+  showAlternatives: false
+}).addTo(map);
 
 // ===================== STATE =====================
 let clickStage = 0;
