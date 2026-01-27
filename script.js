@@ -108,3 +108,9 @@ function resetAll() {
   if (startMarker) map.removeLayer(startMarker);
   if (endMarker) map.removeLayer(endMarker);
 }
+L.circleMarker([35.7796, -78.6382], {
+  radius: 10,
+  color: "red",
+  fillColor: "red",
+  fillOpacity: 1
+}).addTo(map);
