@@ -59,7 +59,7 @@ setInterval(() => {
 }, 30000);
 
 // ===================== OPENROUTESERVICE =====================
-const ORS_API_KEY = "YOUR_API_KEY_HERE";
+const ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFlMWYwNTMzZTQ2MzQxMmM5NDgzNDAyMDcwZGNlN2FkIiwiaCI6Im11cm11cjY0In0=";
 
 async function buildRouteORS(start, end) {
   const url = "https://api.openrouteservice.org/v2/directions/driving-car/geojson";
