@@ -149,7 +149,33 @@ function drawRejectedRoutes(routes) {
     addETABubble(coords, r.total, false);
   });
 }
+// ===================== DRAW ROUTE (COMPATIBILITY WRAPPER) =====================
+function drawRoutePolyline(geojson) {
+  // If multiple routes exist, use smart selection
+  if (geojson.features.length > 1) {
+    chooseBestRoute(geojson);
+    return;
+  }
 
+  // Fallback: single route (old behavior)
+  if (currentRouteLine) map.removeLayer(currentRouteLine);
+
+  const coords = geojson.features[0].geometry.coordinates.map(c => [c[1], c[0]]);
+  currentRouteLine = L.polyline(coords, {
+    color: "blue",
+    weight: 8,
+    opacity: 0.9
+  }).addTo(map);
+
+  map.fitBounds(currentRouteLine.getBounds());
+
+  // ETA update (safe)
+  if (geojson.features[0].properties?.summary?.duration) {
+    const mins = geojson.features[0].properties.summary.duration / 60;
+    const el = document.getElementById("etaValue");
+    if (el) el.innerText = mins.toFixed(1) + " min";
+  }
+}
 // ===================== ETA BUBBLES =====================
 function addETABubble(coords, seconds, isBest) {
   const mid = coords[Math.floor(coords.length / 2)];
