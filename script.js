@@ -12,7 +12,9 @@ let startPoint = null;
 let endPoint = null;
 let startMarker = null;
 let endMarker = null;
-let currentRouteLine = null;
+let bestRouteLine = null;
+let rejectedRouteLines = [];
+let etaMarkers = [];
 
 const allTrafficLights = [];
 
@@ -40,104 +42,164 @@ class TrafficLight {
   }
 }
 
-// ===================== LOAD TRAFFIC LIGHTS =====================
+// ===================== LOAD LIGHTS =====================
 fetch("./data/raleigh_traffic_lights.geojson")
-  .then(res => res.json())
+  .then(r => r.json())
   .then(data => {
-    data.features.forEach(feature => {
-      const [lng, lat] = feature.geometry.coordinates;
+    data.features.forEach(f => {
+      const [lng, lat] = f.geometry.coordinates;
       allTrafficLights.push(new TrafficLight(lat, lng));
     });
-    console.log("Traffic lights loaded:", allTrafficLights.length);
-  })
-  .catch(err => console.error("Failed to load traffic lights:", err));
+    console.log("Lights loaded:", allTrafficLights.length);
+  });
 
-// ===================== GLOBAL LIGHT TIMER (30s) =====================
+// ===================== GLOBAL LIGHT TIMER =====================
 setInterval(() => {
-  allTrafficLights.forEach(light => light.toggle());
+  allTrafficLights.forEach(l => l.toggle());
 }, 30000);
 
-// ===================== OPENROUTESERVICE API =====================
-const ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFlMWYwNTMzZTQ2MzQxMmM5NDgzNDAyMDcwZGNlN2FkIiwiaCI6Im11cm11cjY0In0=";
+// ===================== OPENROUTESERVICE =====================
+const ORS_API_KEY = "YOUR_API_KEY_HERE";
 
 async function buildRouteORS(start, end) {
-  if (!start || !end) return;
-
   const url = "https://api.openrouteservice.org/v2/directions/driving-car/geojson";
   const body = {
     coordinates: [
       [start.lng, start.lat],
       [end.lng, end.lat]
-    ]
+    ],
+    alternative_routes: { target_count: 3 }
   };
 
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Authorization": ORS_API_KEY,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(body)
-    });
-
-    if (!res.ok) {
-      console.error("ORS request failed:", await res.text());
-      return;
-    }
-
-    const data = await res.json();
-    drawRoutePolyline(data);
-    updateETAORS(data);
-  } catch (err) {
-    console.error("ORS request error:", err);
-  }
-}
-
-// ===================== DRAW ROUTE =====================
-function drawRoutePolyline(geojson) {
-  if (currentRouteLine) map.removeLayer(currentRouteLine);
-
-  const coords = geojson.features[0].geometry.coordinates.map(c => [c[1], c[0]]);
-  currentRouteLine = L.polyline(coords, { color: "blue", weight: 8, opacity: 0.9 }).addTo(map);
-
-  map.fitBounds(currentRouteLine.getBounds());
-}
-
-// ===================== ETA =====================
-function updateETAORS(geojson) {
-  let eta = geojson.features[0].properties.summary.duration;
-
-  allTrafficLights.forEach(light => {
-    if (light.state === "red") eta += 30; // add 30s per red light
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Authorization": ORS_API_KEY,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
   });
 
-  document.getElementById("etaValue").innerText = (eta / 60).toFixed(1) + " min";
+  const data = await res.json();
+  chooseBestRoute(data);
+}
+
+// ===================== ROUTE LOGIC =====================
+function chooseBestRoute(geojson) {
+  clearRoutes();
+
+  let scored = [];
+
+  geojson.features.forEach(feature => {
+    const base = feature.properties.summary.duration;
+    const coords = feature.geometry.coordinates;
+
+    let redCount = 0;
+
+    coords.forEach(c => {
+      const lat = c[1];
+      const lng = c[0];
+
+      allTrafficLights.forEach(light => {
+        const dLat = lat - light.lat;
+        const dLng = lng - light.lng;
+        if (Math.sqrt(dLat * dLat + dLng * dLng) < 0.0008) {
+          if (light.state === "red") redCount++;
+        }
+      });
+    });
+
+    const total = base + redCount * 30;
+    scored.push({ feature, total });
+  });
+
+  scored.sort((a, b) => a.total - b.total);
+
+  drawBestRoute(scored[0]);
+  drawRejectedRoutes(scored.slice(1));
+}
+
+// ===================== DRAW ROUTES =====================
+function drawBestRoute(route) {
+  const coords = route.feature.geometry.coordinates.map(c => [c[1], c[0]]);
+  bestRouteLine = L.polyline(coords, {
+    color: "blue",
+    weight: 8,
+    opacity: 0.9
+  }).addTo(map);
+
+  map.fitBounds(bestRouteLine.getBounds());
+
+  addETABubble(coords, route.total, true);
+  document.getElementById("etaValue").innerText =
+    (route.total / 60).toFixed(1) + " min";
+}
+
+function drawRejectedRoutes(routes) {
+  routes.forEach(r => {
+    const coords = r.feature.geometry.coordinates.map(c => [c[1], c[0]]);
+    const line = L.polyline(coords, {
+      color: "#888",
+      weight: 4,
+      opacity: 0.6,
+      dashArray: "6,6"
+    }).addTo(map);
+
+    rejectedRouteLines.push(line);
+    addETABubble(coords, r.total, false);
+  });
+}
+
+// ===================== ETA BUBBLES =====================
+function addETABubble(coords, seconds, isBest) {
+  const mid = coords[Math.floor(coords.length / 2)];
+
+  const marker = L.marker(mid, {
+    icon: L.divIcon({
+      className: "eta-bubble",
+      html: `<div style="
+        background:${isBest ? "#1e90ff" : "#777"};
+        color:white;
+        padding:4px 8px;
+        border-radius:12px;
+        font-size:12px;
+        font-weight:bold;
+        white-space:nowrap;
+      ">${(seconds / 60).toFixed(1)} min</div>`
+    })
+  }).addTo(map);
+
+  etaMarkers.push(marker);
 }
 
 // ===================== CLICK HANDLING =====================
 map.on("click", e => {
   if (clickStage === 0) {
     resetAll();
-    startPoint = L.latLng(e.latlng.lat, e.latlng.lng);
+    startPoint = e.latlng;
     startMarker = L.marker(startPoint).addTo(map).bindPopup("Start").openPopup();
     clickStage = 1;
   } else {
-    endPoint = L.latLng(e.latlng.lat, e.latlng.lng);
+    endPoint = e.latlng;
     endMarker = L.marker(endPoint).addTo(map).bindPopup("Destination").openPopup();
     buildRouteORS(startPoint, endPoint);
     clickStage = 0;
   }
 });
 
-// ===================== RESET =====================
+// ===================== CLEANUP =====================
+function clearRoutes() {
+  if (bestRouteLine) map.removeLayer(bestRouteLine);
+  rejectedRouteLines.forEach(r => map.removeLayer(r));
+  etaMarkers.forEach(m => map.removeLayer(m));
+  rejectedRouteLines = [];
+  etaMarkers = [];
+}
+
 function resetAll() {
+  clearRoutes();
   if (startMarker) map.removeLayer(startMarker);
-  startMarker = null;
-
   if (endMarker) map.removeLayer(endMarker);
+  startMarker = null;
   endMarker = null;
-
-  if (currentRouteLine) map.removeLayer(currentRouteLine);
-  currentRouteLine = null;
 }
