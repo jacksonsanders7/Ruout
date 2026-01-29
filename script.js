@@ -1,6 +1,8 @@
 // ===================== MAP =====================
 const map = L.map("map").setView([35.7796, -78.6382], 12);
-
+setTimeout(() => {
+  map.invalidateSize(true);
+}, 0);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   maxZoom: 19,
   attribution: "© OpenStreetMap contributors"
@@ -197,40 +199,18 @@ function activateRoute(index) {
 
 // ===================== CLICK HANDLING =====================
 map.on("click", e => {
-  // Ignore clicks that originate from UI overlays
-  if (e.originalEvent.target.closest("#etaBox")) return;
+  console.log("CLICK:", e.latlng);
 
-  // Defensive: ensure Leaflet click has valid latlng
-  if (!e.latlng) return;
-
-  // FIRST CLICK → START
   if (clickStage === 0) {
     resetAll();
-
-    startPoint = L.latLng(e.latlng.lat, e.latlng.lng);
-    startMarker = L.marker(startPoint)
-      .addTo(map)
-      .bindPopup("Start")
-      .openPopup();
-
+    startPoint = e.latlng;
+    startMarker = L.marker(startPoint).addTo(map).bindPopup("Start").openPopup();
     clickStage = 1;
-    return;
-  }
-
-  // SECOND CLICK → DESTINATION
-  if (clickStage === 1) {
-    endPoint = L.latLng(e.latlng.lat, e.latlng.lng);
-    endMarker = L.marker(endPoint)
-      .addTo(map)
-      .bindPopup("Destination")
-      .openPopup();
-
+  } else {
+    endPoint = e.latlng;
+    endMarker = L.marker(endPoint).addTo(map).bindPopup("Destination").openPopup();
     clickStage = 0;
-
-    // Slight delay prevents race condition with map redraws
-    setTimeout(() => {
-      buildRouteORS(startPoint, endPoint);
-    }, 0);
+    buildRouteORS(startPoint, endPoint);
   }
 });
 
