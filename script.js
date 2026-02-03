@@ -6,7 +6,6 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   attribution: "© OpenStreetMap contributors"
 }).addTo(map);
 
-// ensure correct sizing after load
 setTimeout(() => map.invalidateSize(), 0);
 
 // ================= STATE =================
@@ -56,22 +55,37 @@ fetch("./data/raleigh_traffic_lights.geojson")
     console.log("Traffic lights loaded:", allTrafficLights.length);
   });
 
-// toggle lights every 30s and refresh ETA
+// ================= LIGHT TIMER =================
 setInterval(() => {
   if (!lightsLoaded) return;
 
   allTrafficLights.forEach(l => l.toggle());
 
   if (activeRouteIndex !== null && availableRoutes[activeRouteIndex]) {
-    const eta = calculateRouteETA(availableRoutes[activeRouteIndex]);
-    document.getElementById("etaValue").innerText = eta + " min";
+    document.getElementById("etaValue").innerText =
+      calculateRouteETA(availableRoutes[activeRouteIndex]) + " min";
     updateRouteOptions();
   }
 }, 30000);
 
-// ================= ORS ROUTING =================
+// ================= ORS CONFIG =================
 const ORS_API_KEY = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImFlMWYwNTMzZTQ2MzQxMmM5NDgzNDAyMDcwZGNlN2FkIiwiaCI6Im11cm11cjY0In0=";
 
+// ================= GEOCODING =================
+async function geocodeORS(query) {
+  const res = await fetch(
+    `https://api.openrouteservice.org/geocode/search?text=${encodeURIComponent(query)}`,
+    { headers: { Authorization: ORS_API_KEY } }
+  );
+
+  const data = await res.json();
+  if (!data.features?.length) return null;
+
+  const [lng, lat] = data.features[0].geometry.coordinates;
+  return L.latLng(lat, lng);
+}
+
+// ================= ROUTING =================
 async function buildRouteORS(start, end) {
   const body = {
     coordinates: [
@@ -86,7 +100,7 @@ async function buildRouteORS(start, end) {
     {
       method: "POST",
       headers: {
-        "Authorization": ORS_API_KEY,
+        Authorization: ORS_API_KEY,
         "Content-Type": "application/json"
       },
       body: JSON.stringify(body)
@@ -104,25 +118,23 @@ function drawRoute(index) {
   if (routeLines[index]) map.removeLayer(routeLines[index]);
 
   const coords = availableRoutes[index].geometry.coordinates.map(c => [c[1], c[0]]);
-  const color = index === activeRouteIndex ? "blue" : "gray";
+  const active = index === activeRouteIndex;
 
   routeLines[index] = L.polyline(coords, {
-    color,
-    weight: 7,
-    opacity: index === activeRouteIndex ? 0.95 : 0.5
+    color: active ? "blue" : "gray",
+    weight: active ? 8 : 5,
+    opacity: active ? 0.95 : 0.5
   }).addTo(map);
 
-  if (index === activeRouteIndex) {
-    map.fitBounds(routeLines[index].getBounds());
-  }
+  if (active) map.fitBounds(routeLines[index].getBounds());
 }
 
 function activateRoute(index) {
   activeRouteIndex = index;
   for (let i = 0; i < availableRoutes.length; i++) drawRoute(i);
 
-  const eta = calculateRouteETA(availableRoutes[index]);
-  document.getElementById("etaValue").innerText = eta + " min";
+  document.getElementById("etaValue").innerText =
+    calculateRouteETA(availableRoutes[index]) + " min";
 }
 
 // ================= ETA LOGIC =================
@@ -130,7 +142,7 @@ function metersToMiles(m) { return m / 1609.34; }
 
 function getSpeedLimit(step) {
   const n = (step.name || "").toLowerCase();
-  if (n.includes("i-") || n.includes("hwy") || n.includes("interstate")) return 70;
+  if (n.includes("i-") || n.includes("hwy")) return 70;
   return 35;
 }
 
@@ -165,11 +177,30 @@ function calculateRouteETA(feature) {
 
 function updateRouteOptions() {
   if (availableRoutes.length < 2) return;
+
   document.getElementById("route1Eta").innerText =
     `Route 1: ${calculateRouteETA(availableRoutes[0])} min`;
   document.getElementById("route2Eta").innerText =
     `Route 2: ${calculateRouteETA(availableRoutes[1])} min`;
 }
+
+// ================= SEARCH BUTTON =================
+document.getElementById("routeBtn").addEventListener("click", async () => {
+  const s = document.getElementById("startInput").value;
+  const e = document.getElementById("endInput").value;
+  if (!s || !e) return alert("Enter start and destination");
+
+  reset();
+
+  startPoint = await geocodeORS(s);
+  endPoint = await geocodeORS(e);
+  if (!startPoint || !endPoint) return alert("Location not found");
+
+  startMarker = L.marker(startPoint).addTo(map).bindPopup("Start").openPopup();
+  endMarker = L.marker(endPoint).addTo(map).bindPopup("Destination").openPopup();
+
+  buildRouteORS(startPoint, endPoint);
+});
 
 // ================= CLICK TO SET START/END =================
 map.on("click", e => {
@@ -190,8 +221,9 @@ map.on("click", e => {
 function reset() {
   if (startMarker) map.removeLayer(startMarker);
   if (endMarker) map.removeLayer(endMarker);
-  routeLines.forEach(l => { if (l) map.removeLayer(l); });
+  routeLines.forEach(l => l && map.removeLayer(l));
 
+  startMarker = endMarker = null;
   routeLines = [null, null];
   availableRoutes = [];
   activeRouteIndex = null;
