@@ -55,3 +55,66 @@ html, body {
   font-weight: bold;
   text-align: center;
 }
+<style>
+#searchPanel {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+
+  background: white;
+  padding: 14px;
+  border-radius: 14px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+#searchPanel input {
+  width: 260px;              /* 🔥 BIGGER */
+  padding: 12px 14px;        /* 🔥 TALLER */
+  font-size: 16px;           /* 🔥 EASIER TO READ */
+  border-radius: 10px;
+  border: 1px solid #ccc;
+}
+
+#searchPanel input:focus {
+  outline: none;
+  border-color: #007aff;     /* Apple blue */
+  box-shadow: 0 0 0 2px rgba(0,122,255,0.25);
+}
+
+#searchPanel button {
+  padding: 12px 18px;
+  font-size: 16px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+
+  background: #007aff;
+  color: white;
+  font-weight: 600;
+}
+
+#searchPanel button:hover {
+  background: #005fd1;
+}
+
+/* ETA box polish */
+#etaBox {
+  position: absolute;
+  top: 90px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: white;
+  padding: 8px 14px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  z-index: 1000;
+  font-size: 15px;
+}
+</style>
+
